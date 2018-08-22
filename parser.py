@@ -1,11 +1,10 @@
-#!/usr/bin/env python3.5
-# -*- encoding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 import csv
 # для python 2.7 - urllib2
 # import urllib2
 # import requests
-
+import re
 # для python 3.3 - urllib.request
 import urllib.request
 from time import sleep
@@ -13,7 +12,7 @@ from time import sleep
 from bs4 import BeautifulSoup
 
 # BASE_URL = 'https://www.avito.ru/sankt-peterburg/tovary_dlya_kompyutera/komplektuyuschie?q=gtx%201080&sgtd=21'
-BASE_URL = 'https://www.avito.ru/sankt-peterburg/tovary_dlya_kompyutera/komplektuyuschie?s_trg=3&q=1080'
+BASE_URL = 'https://www.avito.ru/sankt-peterburg/tovary_dlya_kompyutera/komplektuyuschie?pmax=25000&pmin=15000&s=1&s_trg=3&q=1080'
 
 
 def get_html(url):
@@ -29,7 +28,7 @@ def get_page_count(html):
     print(paggination)
     # основаная строка для парсинга количества страниц
     if paggination is None:
-        return 2
+        return 1
     return int(paggination.find_all('a', href=True)[-1]['href'][-3:])
 
 
@@ -41,22 +40,17 @@ def parse(html):
     for link in links:
         if ((('http://avito.ru' + link.get('href')) not in (links_array)) & (link.get('href').find('favorites') == -1)):
             links_array.append('http://avito.ru' + link.get('href'))
-    descript = work_item.findAll('div', 'about')
-    descript_array = []
-    for desc in descript:
-        descript_array.append(desc)
-    print(descript_array)
-    print(links_array)
-    description = work_item.find_all('div', class_='description')
-    print("here")
+    description = soup.findAll('div', {'class': 'item_table-header'})
     data = []
     for item in description:
         data.append({
-            'title': item.a.text,
-            'price': item.find('span', class_='price').text.strip()
-            # 'type': item.find('div', class_='data').p.text.strip(),
+            'Name': item.a.text,
+            'Price': item.find('span', class_='price').text.strip(),
+            'Link': 'www.avito.ru'+item.find('a', href=re.compile(r'[/]([a-z]|[A-Z])\w+')).attrs['href']
         })
-    print(data)
+    # print(data)
+    for t in data:
+        print(t)
     print('end')
     return data
 
@@ -65,13 +59,13 @@ def save(projects, path):
     with open(path, 'w') as csv_file:
         writer = csv.writer(csv_file)
 
-        writer.writerow(('Name', 'Price'))  # , 'Desc'))
+        writer.writerow(('Name', 'Price', 'Link'))
 
         writer.writerows(
             # ".encode('utf-8')" нужен для правильной интерпретации unicode
-            (project['title'].encode('utf-8'),
-             project['price'].encode('utf-8'),
-             # project['type'].encode('utf-8'),
+            (project['Name'].encode('utf-8'),
+             project['Price'].encode('utf-8'),
+             project['Link'].encode('utf-8'),
              ) for project in projects
         )
 
@@ -85,8 +79,12 @@ def main():
     try:
         for page in range(1, total_pages_words + 1):
             print('Парсинг %d%% (%d/%d)' % (int(float(page) / float(total_pages_words) * 100), page, total_pages_words))
-            projects.extend(parse(get_html(BASE_URL + "?p=%d" % page)))
-            sleep(10)
+            if total_pages_words == 1:
+                projects.extend(parse(get_html(BASE_URL)))
+                sleep(10)
+            else:
+                projects.extend(parse(get_html(BASE_URL + "?p=%d" % page)))
+                sleep(10)
     finally:
         print('Сохранение...')
         save(projects, 'projects_all.csv')
