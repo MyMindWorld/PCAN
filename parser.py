@@ -1,24 +1,21 @@
 # -*- coding: utf-8 -*-
 
 import csv
-# для python 2.7 - urllib2
-# import urllib2
-# import requests
 import re
-# для python 3.3 - urllib.request
 import urllib.request
 from time import sleep
-
+from transliterate import translit, get_available_language_codes
 from bs4 import BeautifulSoup
+from collections import OrderedDict
 
-# BASE_URL = 'https://www.avito.ru/sankt-peterburg/tovary_dlya_kompyutera/komplektuyuschie?q=gtx%201080&sgtd=21'
 BASE_URL = 'https://www.avito.ru/sankt-peterburg/tovary_dlya_kompyutera/komplektuyuschie?pmax=25000&pmin=15000&s=1&s_trg=3&q=1080'
-
+data = []
 
 def get_html(url):
     response = urllib.request.urlopen(url)
     return response.read()
-
+def getKey(item):
+    return item[1]
 
 def get_page_count(html):
     # 'html.parser' для совместмости с debian 8. без этого на debian не работает. на ubuntu нормально.
@@ -26,7 +23,6 @@ def get_page_count(html):
     # print (soup)
     paggination = soup.find('div', class_='pagination-pages clearfix')
     print(paggination)
-    # основаная строка для парсинга количества страниц
     if paggination is None:
         return 1
     return int(paggination.find_all('a', href=True)[-1]['href'][-3:])
@@ -41,33 +37,34 @@ def parse(html):
         if ((('http://avito.ru' + link.get('href')) not in (links_array)) & (link.get('href').find('favorites') == -1)):
             links_array.append('http://avito.ru' + link.get('href'))
     description = soup.findAll('div', {'class': 'item_table-header'})
-    data = []
+
     for item in description:
         data.append({
             'Name': item.a.text,
-            'Price': item.find('span', class_='price').text.strip(),
+            'Price': str(''.join(re.findall(r'(\d+)',item.find('span', class_='price').text.strip()))),
             'Link': 'www.avito.ru'+item.find('a', href=re.compile(r'[/]([a-z]|[A-Z])\w+')).attrs['href']
         })
-    # print(data)
-    for t in data:
-        print(t)
-    print('end')
+    print(data)
+    #sorted(data.values())
+    '''for test in data: #Для тестового построчного вывода обьявлений
+        print(test)
+    print('end')'''
     return data
 
 
 def save(projects, path):
-    with open(path, 'w') as csv_file:
+    with open(path, 'w', encoding='utf-8') as csv_file:
         writer = csv.writer(csv_file)
 
         writer.writerow(('Name', 'Price', 'Link'))
 
         writer.writerows(
-            # ".encode('utf-8')" нужен для правильной интерпретации unicode
-            (project['Name'].encode('utf-8'),
-             project['Price'].encode('utf-8'),
-             project['Link'].encode('utf-8'),
+            (translit(project['Name'], 'ru', reversed=True),
+             translit(project['Price'], 'ru', reversed=True),
+             translit(project['Link'], 'ru', reversed=True),
              ) for project in projects
         )
+
 
 
 def main():
@@ -88,11 +85,6 @@ def main():
     finally:
         print('Сохранение...')
         save(projects, 'projects_all.csv')
-
-    # печать для теста
-    # for item in projects:
-    #   print(item['title'].encode('utf-8'))
-    #  print(item['price'].encode('utf-8'))
 
 
 if __name__ == '__main__':
